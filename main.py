@@ -30,11 +30,11 @@ def verify_face():
         with open(mast_path, "wb") as f:
             f.write(base64.b64decode(img_master_base64))
 
-        # Face Match Logic (Facenet512 is more accurate)
+       # Facenet512 ki jagah OpenFace use karein (RAM bachaane ke liye)
         result = DeepFace.verify(
             img1_path = cap_path, 
             img2_path = mast_path, 
-            model_name = "Facenet512",
+            model_name = "OpenFace", # Ye 512MB RAM ke liye best hai
             distance_metric = "cosine",
             enforce_detection = False
         )
