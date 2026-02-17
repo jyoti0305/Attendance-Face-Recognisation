@@ -1,6 +1,5 @@
 flask
 flask-cors
-deepface
+numpy
+requests
 opencv-python-headless
-tf-keras
-tensorflow-cpu==2.15.0
