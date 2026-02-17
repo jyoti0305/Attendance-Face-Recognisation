@@ -1,3 +1,5 @@
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' # फालतू logs बंद करने के लिए
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from deepface import DeepFace
