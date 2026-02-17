@@ -3,52 +3,58 @@ from flask_cors import CORS
 from deepface import DeepFace
 import base64
 import os
-import cv2
-import numpy as np
+import uuid
 
 app = Flask(__name__)
-CORS(app)  # Taaki Apps Script se request block na ho
+CORS(app)
 
 @app.route('/')
 def home():
-    return "Face API is Running!"
+    return "Face AI Server is Running!"
 
 @app.route('/verify', methods=['POST'])
 def verify_face():
+    # Unique filenames taaki multiple users ka data mix na ho
+    u_id = uuid.uuid4().hex
+    cap_path = f"captured_{u_id}.jpg"
+    mast_path = f"master_{u_id}.jpg"
+    
     try:
         data = request.json
-        # 1. Captured photo aur Master photo (jo Drive se aayegi) nikalna
         img_captured_base64 = data['captured'].split(",")[1]
         img_master_base64 = data['master'].split(",")[1]
 
-        # 2. Temporary files mein save karna taaki DeepFace read kar sake
-        with open("captured.jpg", "wb") as f:
+        # Base64 se images save karna
+        with open(cap_path, "wb") as f:
             f.write(base64.b64decode(img_captured_base64))
-        with open("master.jpg", "wb") as f:
+        with open(mast_path, "wb") as f:
             f.write(base64.b64decode(img_master_base64))
 
-        # 3. DeepFace Match Logic
-        # VGG-Face model kaafi accurate hai attendance ke liye
+        # Face Match Logic (Facenet512 is more accurate)
         result = DeepFace.verify(
-            img1_path = "captured.jpg", 
-            img2_path = "master.jpg", 
-            model_name = "VGG-Face",
+            img1_path = cap_path, 
+            img2_path = mast_path, 
+            model_name = "Facenet512",
             distance_metric = "cosine",
-            enforce_detection = True # Isse photo mein face hona zaroori hai
+            enforce_detection = False
         )
 
-        # 4. Result bhejna
-        # threshold 0.40 se 0.50 ke beech rakhein (jitna kam, utna strict)
-        is_matched = result["verified"]
-        
+        # Cleanup: Files delete karna zaroori hai
+        if os.path.exists(cap_path): os.remove(cap_path)
+        if os.path.exists(mast_path): os.remove(mast_path)
+
         return jsonify({
             "success": True,
-            "match": is_matched,
+            "match": result["verified"],
             "distance": result["distance"]
         })
 
     except Exception as e:
+        if os.path.exists(cap_path): os.remove(cap_path)
+        if os.path.exists(mast_path): os.remove(mast_path)
         return jsonify({"success": False, "error": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    # Render ke liye port 10000 zaroori hota hai
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port)
