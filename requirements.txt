@@ -3,4 +3,4 @@ flask-cors
 deepface
 opencv-python-headless
 tf-keras
-tensorflow==2.15.0
+tensorflow-cpu
