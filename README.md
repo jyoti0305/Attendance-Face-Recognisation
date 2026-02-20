@@ -16,13 +16,13 @@ An enterprise-grade attendance solution that combines Biometric Authentication, 
 - **Scripting:** Google Apps Script (for seamless data flow)
 
 ## 📸 Screenshots
-###| Face Unlock |
+##| Face Unlock |
 
 <img width="1072" height="1036" alt="image" src="https://github.com/user-attachments/assets/80506ea0-b432-44ce-8fda-cea47dd73f19" />
 <img width="1072" height="1036" alt="image" src="https://github.com/user-attachments/assets/e0ad643e-8ca7-42db-9f7a-f4d1f288ae5a" />
 
 
-###| Attendance Portal |
+##| Attendance Portal |
 
 
 <img width="595" height="817" alt="image" src="https://github.com/user-attachments/assets/de48d9d6-96ff-4cc6-be27-acf4d7527b52" />
@@ -30,7 +30,7 @@ An enterprise-grade attendance solution that combines Biometric Authentication, 
 
 
 
-###| Data in Google Sheets |
+##| Data in Google Sheets |
 
 <img width="784" height="380" alt="image" src="https://github.com/user-attachments/assets/0ffd66bb-eb2f-411a-bcad-3dd6077047ce" />
 <img width="1892" height="523" alt="image" src="https://github.com/user-attachments/assets/6b72ca48-0a12-4ec2-90a2-74d8a15f9b67" />
