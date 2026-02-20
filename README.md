@@ -36,7 +36,7 @@ An enterprise-grade attendance solution that combines Biometric Authentication, 
 <img width="1892" height="523" alt="image" src="https://github.com/user-attachments/assets/6b72ca48-0a12-4ec2-90a2-74d8a15f9b67" />
 
 ## 🛠️ Installation & Setup
-1. Clone the repository: `git clone [Your-Repo-Link]`
+1. Clone the repository: `git clone [[Your-Repo-Link]](https://github.com/jyoti0305/Attendance-Face-Recognisation.git)`
 2. Install Python dependencies: `pip install opencv-python face-recognition gspread oauth2client`
 3. Set up your Google Cloud Console credentials and download `credentials.json`.
 4. Run the Python authentication script: `python app.py`
