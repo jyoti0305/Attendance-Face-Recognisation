@@ -10,9 +10,8 @@ app = Flask(__name__)
 CORS(app)
 
 # --- CONFIGURATION ---
-# Threshold: Isse upar score aaya to "Match" hai.
-# SFace ke liye 0.363 standard cosine similarity threshold hai.
-MATCH_THRESHOLD = 0.363 
+# Threshold badha kar 0.40 kar diya hai strict security ke liye
+MATCH_THRESHOLD = 0.40 
 
 # Folder jahan AI models save honge
 WEIGHTS_DIR = "weights"
@@ -46,7 +45,6 @@ def get_model_path(model_key):
             return None
     return path
 
-# Initialize Models Globally (runs once at startup)
 print("Initializing AI Models...")
 detector_path = get_model_path("detector")
 recognizer_path = get_model_path("recognizer")
@@ -67,7 +65,6 @@ else:
 
 # --- 2. HELPER FUNCTIONS ---
 def base64_to_image(b64_str):
-    """Base64 string ko OpenCV image mein convert karta hai (Memory mein)."""
     try:
         if "," in b64_str:
             b64_str = b64_str.split(",")[1]
@@ -78,34 +75,64 @@ def base64_to_image(b64_str):
     except Exception:
         return None
 
-def get_face_feature(image):
-    """Image se face dhoondh kar uska 'feature vector' nikalta hai."""
-    if image is None: return None
+# --- NAYA SECURITY FUNCTION: PASSIVE LIVENESS CHECK ---
+def check_liveness(image, face_box):
+    """
+    Check if the face is a real 3D person or a flat 2D photo/screen.
+    Uses mathematical texture analysis (Laplacian Variance & Std Deviation).
+    """
+    x, y, w, h = [int(v) for v in face_box[:4]]
+    img_h, img_w = image.shape[:2]
+    
+    # Extract the face region safely
+    y1, y2 = max(0, y), min(img_h, y+h)
+    x1, x2 = max(0, x), min(img_w, x+w)
+    face_roi = image[y1:y2, x1:x2]
+
+    if face_roi.size == 0:
+        return False, "Invalid Face Box"
+
+    gray = cv2.cvtColor(face_roi, cv2.COLOR_BGR2GRAY)
+
+    # 1. Blur Detection (Printed photos tend to be blurry/flat)
+    lap_var = cv2.Laplacian(gray, cv2.CV_64F).var()
+
+    # 2. Glare/Screen Detection (Screens emit flat light, reducing contrast variance)
+    std_dev = np.std(gray)
+
+    # Thresholds: Isse kam score aaya toh wo screen ya photo hai
+    if lap_var < 35.0:
+        return False, "Spoof Detected: Printed Photo (Low Sharpness)"
+    
+    if std_dev < 15.0:
+        return False, "Spoof Detected: Digital Screen (Low Contrast)"
+
+    return True, "Real Face"
+
+def get_face_feature_and_liveness(image, check_fake=False):
+    if image is None: return None, None, False, "No Image"
 
     height, width, _ = image.shape
-    # Detector ko image size batana zaroori hai
     detector.setInputSize((width, height))
-
-    # Face Detection
-    # faces variable format: [x1, y1, w, h, x_re, y_re, ...]
     _, faces = detector.detect(image)
     
-    # Agar face nahi mila
     if faces is None:
-        return None
+        return None, None, False, "No face found"
 
-    # Sirf pehla face lete hain (faces[0])
-    # Align and Crop (Face ko seedha karna)
+    # Agar check_fake True hai, toh hum photo/screen check karenge
+    if check_fake:
+        is_real, spoof_msg = check_liveness(image, faces[0])
+        if not is_real:
+            return None, faces[0], False, spoof_msg # Reject as fake
+
     aligned_face = recognizer.alignCrop(image, faces[0])
-    
-    # Feature Extraction (128D vector)
     feature = recognizer.feature(aligned_face)
-    return feature
+    return feature, faces[0], True, "Valid"
 
 # --- 3. API ROUTES ---
 @app.route('/')
 def home():
-    return jsonify({"status": "running", "model": "OpenCV SFace"})
+    return jsonify({"status": "running", "model": "OpenCV SFace + Anti-Spoofing"})
 
 @app.route('/verify', methods=['POST'])
 def verify_face():
@@ -114,26 +141,38 @@ def verify_face():
         if not data or 'captured' not in data or 'master' not in data:
             return jsonify({"success": False, "error": "Missing image data"}), 400
 
-        # Images load karo
         img_cap = base64_to_image(data['captured'])
         img_mst = base64_to_image(data['master'])
 
         if img_cap is None or img_mst is None:
             return jsonify({"success": False, "error": "Invalid Base64 Image"}), 400
 
-        # Features nikalo
-        feat_cap = get_face_feature(img_cap)
-        feat_mst = get_face_feature(img_mst)
-
-        if feat_cap is None:
-            return jsonify({"success": False, "error": "No face found in 'captured' image"}), 400
+        # Master image se feature nikalo (Isme spoof check ki zarurat nahi)
+        feat_mst, _, _, _ = get_face_feature_and_liveness(img_mst, check_fake=False)
         if feat_mst is None:
             return jsonify({"success": False, "error": "No face found in 'master' image"}), 400
 
-        # Compare karo (Cosine Similarity)
-        # Result ek score hota hai. Higher is better match.
-        score = recognizer.match(feat_cap, feat_mst, cv2.FaceRecognizerSF_FR_COSINE)
+        # Captured live image se feature nikalo AUR spoof check karo
+        feat_cap, _, is_real, spoof_msg = get_face_feature_and_liveness(img_cap, check_fake=True)
         
+        # Agar spoof pakda gaya (photo ya screen)
+        if not is_real:
+            # Hum "match: False" bhejenge taaki frontend par "❌ Face Not Matched" likha aaye
+            # Employee ko pata bhi nahi chalega ki wo block ho chuka hai fake photo ki wajah se.
+            print(f"SECURITY ALERT: {spoof_msg}")
+            return jsonify({
+                "success": True, 
+                "match": False, 
+                "score": 0.0, 
+                "error": spoof_msg,
+                "threshold": MATCH_THRESHOLD
+            })
+
+        if feat_cap is None:
+            return jsonify({"success": False, "error": "No face found in 'captured' image"}), 400
+
+        # Agar asli chehra hai, tab compare karo
+        score = recognizer.match(feat_cap, feat_mst, cv2.FaceRecognizerSF_FR_COSINE)
         is_match = bool(score >= MATCH_THRESHOLD)
 
         return jsonify({
