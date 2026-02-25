@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AI Smart Attendance System</title>
+    <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; text-align: center; background: #f0f2f5; padding: 15px; margin:0; }
+        .app-card { background: white; max-width: 400px; margin: 10px auto; padding: 25px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        h2 { color: #1a73e8; margin-top: 0; }
+        #login-view, #face-view, #app-ui { display: none; }
+        .camera-box { width: 100%; height: 280px; background: #000; border-radius: 15px; overflow: hidden; margin-top: 15px; border: 4px solid #1a73e8; position: relative; }
+        video { width: 100%; height: 100%; object-fit: cover; }
+        .user-box { background: #f8f9fa; border-radius: 10px; padding: 15px; margin: 15px 0; border: 1px solid #e0e0e0; }
+        .btn { width: 100%; padding: 16px; margin: 8px 0; border: none; border-radius: 12px; font-size: 18px; font-weight: bold; cursor: pointer; transition: 0.3s; }
+        .btn-in { background: #28a745; color: white; }
+        .btn-out { background: #ea4335; color: white; }
+        .btn-reg { background: #1a73e8; color: white; margin-top: 10px; }
+        .btn:disabled { background: #d1d5db; color: #9ca3af; cursor: not-allowed; }
+        #status-indicator { font-weight: bold; margin: 10px 0; font-size: 14px; }
+        .history-box { margin-top: 20px; text-align: left; border-top: 2px solid #eee; padding-top: 15px; }
+        .history-item { display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid #f9f9f9; font-size: 12px; }
+        .status-tag { padding: 3px 8px; border-radius: 5px; font-weight: bold; font-size: 10px; }
+        .tag-in { background: #e6f4ea; color: #1e7e34; }
+        .tag-out { background: #fce8e6; color: #d93025; }
+        input[type="email"] { width: 90%; padding: 12px; margin: 10px 0; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; }
+    </style>
+</head>
+<body>
+    <div class="app-card">
+        <div id="loading" style="display:none;">✨ Loading AI Models...</div>
+        
+        <div id="login-view">
+            <h2>Welcome</h2>
+            <p style="color:#555; font-size:14px;">Please enter your employee email to access the portal.</p>
+            <input type="email" id="emailInput" placeholder="employee@company.com">
+            <button class="btn btn-reg" onclick="saveEmailAndLoad()">Continue</button>
+        </div>
+
+        <div id="face-view">
+            <h2 id="face-title">Face ID</h2>
+            <p id="ai-msg" style="color:#666;">Initializing camera...</p>
+            <div class="camera-box">
+                <video id="video" autoplay playsinline muted></video>
+                <canvas id="canvas" style="display:none;"></canvas>
+            </div>
+            <button id="regBtn" class="btn btn-reg" style="display:none;" onclick="captureAndRegister()">Capture & Register My Face</button>
+        </div>
+        
+        <div id="app-ui">
+            <h2>Portal Unlocked</h2>
+            <div class="user-box">
+                <div id="uName" style="font-size: 1.1rem; font-weight: bold;"></div>
+                <div id="uId" style="color: #5f6368; font-size: 14px;"></div>
+                <button onclick="logout()" style="background:none; border:none; color:#1a73e8; text-decoration:underline; cursor:pointer; font-size:12px; margin-top:5px;">Change User</button>
+            </div>
+            <div id="status-indicator">Checking Geofence...</div>
+            <div id="note-area" style="display:none; background:#fff3cd; padding:10px; border-radius:8px; margin-bottom:10px; font-size:12px; color:#856404;"></div>
+            <button id="btnIn" class="btn btn-in" onclick="mark('IN')" disabled>PUNCH IN</button>
+            <button id="btnOut" class="btn btn-out" onclick="mark('OUT')" disabled>PUNCH OUT</button>
+            <div id="feedback" style="margin-top:10px; font-weight:bold;"></div>
+            <div class="history-box">
+                <div style="font-weight: bold; font-size: 13px; margin-bottom: 8px; color: #555;">Recent Activity</div>
+                <div id="history-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // PASTE YOUR NEW APPS SCRIPT WEB APP URL HERE
+    const SCRIPT_URL = "YOUR_NEW_WEB_APP_URL_HERE"; 
+    
+    let config = {}, activeLoc = "", latestPos = null, stream = null, userEmail = "";
+
+    window.onload = () => {
+        userEmail = localStorage.getItem("empEmail");
+        if (userEmail) {
+            loadData();
+        } else {
+            document.getElementById('login-view').style.display = 'block';
+        }
+    };
+
+    function saveEmailAndLoad() {
+        const email = document.getElementById('emailInput').value.trim();
+        if(email === "") { alert("Please enter an email"); return; }
+        localStorage.setItem("empEmail", email);
+        userEmail = email;
+        document.getElementById('login-view').style.display = 'none';
+        loadData();
+    }
+
+    function logout() {
+        localStorage.removeItem("empEmail");
+        location.reload();
+    }
+
+    // Helper to call your Google Apps Script API
+    async function apiCall(action, payload = {}) {
+        payload.action = action;
+        payload.email = userEmail;
+        try {
+            const response = await fetch(SCRIPT_URL, {
+                method: "POST",
+                body: JSON.stringify(payload)
+            });
+            return await response.json();
+        } catch(e) {
+            console.error("API Error", e);
+            alert("Failed to connect to the database.");
+        }
+    }
+
+    async function loadData() {
+        document.getElementById('loading').style.display = 'block';
+        
+        const data = await apiCall("getAppData");
+        document.getElementById('loading').style.display = 'none';
+        
+        if(data && data.authorized) {
+            config = data;
+            document.getElementById('face-view').style.display = 'block';
+            
+            if(data.isRegistered && data.masterPhotos.length > 0) {
+                document.getElementById('face-title').innerText = "AI Face Verification";
+                document.getElementById('ai-msg').innerText = "Starting Camera...";
+                startCamera(true); 
+            } else {
+                document.getElementById('face-title').innerText = "Register Face ID";
+                document.getElementById('regBtn').style.display = 'block';
+                startCamera(false);
+            }
+        } else {
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('loading').innerText = "Unauthorized Access: " + userEmail;
+            setTimeout(logout, 3000);
+        }
+    }
+
+    async function startCamera(shouldVerify) {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            alert("Your browser does not support camera access.");
+            return;
+        }
+
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" } 
+            });
+            const video = document.getElementById('video');
+            video.srcObject = stream;
+
+            video.onloadedmetadata = () => { video.play(); };
+            
+            if(shouldVerify) {
+                const interval = setInterval(async () => {
+                    const canvas = document.getElementById('canvas');
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    canvas.getContext('2d').drawImage(video, 0, 0);
+                    
+                    const capturedPhoto = canvas.toDataURL('image/jpeg', 0.7);
+                    const msg = document.getElementById('ai-msg');
+                    msg.innerText = "⏳ Verifying Identity...";
+
+                    try {
+                        const response = await fetch('https://attendance-face-recognisation.onrender.com/verify', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                captured: capturedPhoto,
+                                master: config.masterPhotos[0] 
+                            })
+                        });
+
+                        const result = await response.json();
+
+                        if (result.success && result.match) {
+                            clearInterval(interval);
+                            msg.style.color = "#28a745";
+                            msg.innerText = "✅ Verified: " + config.user.name;
+                            setTimeout(accessGranted, 1000); 
+                        } else {
+                            msg.style.color = "#ea4335";
+                            msg.innerText = "❌ Face Not Matched (Scanning...)";
+                        }
+                    } catch (err) {
+                        msg.innerText = "⚠️ Server connecting...";
+                    }
+                }, 4000);
+            }
+        } catch (err) { 
+            alert("Camera Permission Denied. Please allow camera access in your browser settings.");
+        }
+    }
+
+    async function captureAndRegister() {
+        const canvas = document.getElementById('canvas');
+        const video = document.getElementById('video');
+        const btn = document.getElementById('regBtn');
+        let photos = [];
+        btn.disabled = true;
+        
+        for (let i = 1; i <= 3; i++) {
+            document.getElementById('ai-msg').innerText = `📸 Taking Photo ${i} of 3...`;
+            await new Promise(r => setTimeout(r, 1500));
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+            photos.push(canvas.toDataURL('image/jpeg', 0.8));
+        }
+        
+        document.getElementById('ai-msg').innerText = "⏳ Saving photos...";
+        await apiCall("registerFace", { photos: photos });
+        location.reload(); 
+    }
+
+    function accessGranted() {
+        if(stream) stream.getTracks().forEach(t => t.stop());
+        document.getElementById('face-view').style.display = 'none';
+        document.getElementById('app-ui').style.display = 'block';
+        document.getElementById('uName').innerText = config.user.name;
+        document.getElementById('uId').innerText = "Emp ID: " + config.user.id;
+        
+        if (config.lockStatus.isLocked) {
+            const note = document.getElementById('note-area');
+            note.style.display = 'block';
+            note.innerText = config.lockStatus.msg;
+        }
+        renderHistory(config.history);
+        startGeofencing();
+    }
+
+    function renderHistory(history) {
+        const list = document.getElementById('history-list');
+        list.innerHTML = history.map(item => `
+            <div class="history-item">
+                <span><b>${item.time}</b><br><small>${item.loc}</small></span>
+                <span class="status-tag ${item.status === 'IN' ? 'tag-in' : 'tag-out'}">${item.status}</span>
+            </div>`).join('');
+    }
+
+    function startGeofencing() {
+        navigator.geolocation.watchPosition(pos => {
+            latestPos = pos;
+            let isInside = false;
+            for (let loc of config.locations) {
+                let d = calculateDistance(pos.coords.latitude, pos.coords.longitude, loc.lat, loc.lng);
+                if (d <= loc.radius) { isInside = true; activeLoc = loc.name; break; }
+            }
+            const st = document.getElementById('status-indicator');
+            st.innerHTML = isInside ? "🟢 Range: " + activeLoc : "🔴 Outside Range";
+            st.style.color = isInside ? "#28a745" : "#ea4335";
+            document.getElementById('btnIn').disabled = !isInside || config.lockStatus.isLocked;
+            document.getElementById('btnOut').disabled = !isInside;
+        }, null, { enableHighAccuracy: true });
+    }
+
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+        const R = 6371000;
+        const dLat = (lat2-lat1)*Math.PI/180;
+        const dLon = (lon2-lon1)*Math.PI/180;
+        const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    }
+
+    async function mark(type) {
+        document.getElementById('feedback').innerText = "Processing...";
+        const response = await apiCall("saveAttendance", {
+            details: {
+                empId: config.user.id, email: config.user.email,
+                status: type, locName: activeLoc,
+                lat: latestPos.coords.latitude, lng: latestPos.coords.longitude
+            }
+        });
+        document.getElementById('feedback').innerText = "✅ " + response.status;
+        setTimeout(() => location.reload(), 1500); 
+    }
+    </script>
+</body>
+</html>
