@@ -43,6 +43,13 @@
         .user-name { font-size: 1.2rem; font-weight: 800; color: #1f2937; }
         .user-id { color: #64748b; font-size: 14px; margin-top: 4px; }
         
+        /* New Mini Buttons inside Info Card */
+        .action-buttons { display: flex; gap: 10px; margin-top: 15px; }
+        .btn-small { flex: 1; padding: 10px; border-radius: 10px; font-size: 13px; font-weight: 700; border: none; cursor: pointer; transition: 0.2s; text-align: center; }
+        .btn-small:active { transform: scale(0.95); }
+        .btn-leave { background: #dbeafe; color: #2563eb; } /* Blue theme */
+        .btn-logout { background: #fee2e2; color: #dc2626; } /* Red theme */
+        
         #status-indicator { font-weight: 700; margin: 15px 0; font-size: 15px; padding: 12px; border-radius: 10px; background: #f3f4f6; }
         #ai-msg { font-size: 15px; font-weight: 600; margin-top: 15px; color: #4b5563; }
         
@@ -87,7 +94,10 @@
             <div class="info-card">
                 <div class="user-name" id="uName"></div>
                 <div class="user-id" id="uId"></div>
-                <button onclick="logout()" style="background:none; border:none; color:#dc2626; font-weight:600; cursor:pointer; font-size:13px; margin-top:12px; padding:0;">Switch User</button>
+                <div class="action-buttons">
+                    <button class="btn-small btn-leave" onclick="window.open('https://forms.gle/Ygb8twaV5zusTaAX8', '_blank')">Apply Leave</button>
+                    <button class="btn-small btn-logout" onclick="logout()">Switch User</button>
+                </div>
             </div>
             
             <div id="status-indicator">Checking Geofence...</div>
